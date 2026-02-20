@@ -5,6 +5,14 @@ edition = "2024"
 repository = "https://github.com/qwertzer12/acdc-file"
 
 [dependencies]
+clap = { version = "4.5.60", features = ["derive"] }
+color-eyre = "0.6.5"
+crossterm = "0.29.0"
+ratatui = "0.30.0"
+
+[[bin]]
+name = "acdc"
+path = "src/main.rs"
 
 # The profile that 'dist' will build with
 [profile.dist]
