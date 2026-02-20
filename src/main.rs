@@ -12,7 +12,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    T,
+    Test,
 }
 
 fn main() {
@@ -20,7 +20,8 @@ fn main() {
 
     match cli.command {
         None => tui::run().unwrap(),
-        Some(Commands::T) => println!("Subcommand was used"),
+        Some(Commands::Test) => println!("Subcommand was used"),
     }
-    api::test();
+
+    api::test("nginx").unwrap();
 }
