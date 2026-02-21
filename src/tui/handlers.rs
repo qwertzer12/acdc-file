@@ -296,7 +296,6 @@ fn handle_modal_key(app: &mut App, key_code: KeyCode) -> LoopControl {
             close_modal = true;
             deferred_logs.push("modal canceled".to_string());
         }
-        KeyCode::Char('q') => return LoopControl::Exit,
         _ => match next_modal.as_mut() {
             Some(modal) => match modal {
                 ModalState::AddImageType { input } => match key_code {

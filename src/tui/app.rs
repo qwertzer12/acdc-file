@@ -268,10 +268,7 @@ impl App {
             if !image.mounts.is_empty() {
                 output.push_str("    volumes:\n");
                 for mount in &image.mounts {
-                    output.push_str(&format!(
-                        "      - \"{}:{}\"\n",
-                        mount.source, mount.target
-                    ));
+                    output.push_str(&format!("      - {}:{}\n", mount.source, mount.target));
                 }
             }
 
