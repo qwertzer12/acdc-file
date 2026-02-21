@@ -6,6 +6,7 @@ struct TokenResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct TagsListResponse {
     name: String,
     tags: Option<Vec<String>>,

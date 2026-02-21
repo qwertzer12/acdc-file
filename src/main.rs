@@ -22,9 +22,16 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        None => tui::run().unwrap(),
-        Some(Commands::Test) => println!("Subcommand was used"),
+        None => {
+            if cli.console {
+                println!("Console mode enabled (no TUI)."); // Placeholder for console mode logic
+            } else {
+                tui::run().unwrap();
+            }
+        }
+        Some(Commands::Test) => {
+            println!("Subcommand was used");
+            api::test("nginx").unwrap();
+        }
     }
-
-    api::test("nginx").unwrap();
 }
