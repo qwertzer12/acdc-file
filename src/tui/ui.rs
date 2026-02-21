@@ -183,13 +183,14 @@ pub fn render(frame: &mut Frame, app: &App) {
                 .map(|(offset, image)| {
                     let index = start + offset;
                     ListItem::new(format!(
-                        "{} {}: {}/{}:{}   ->   {}   mounts:{}   env:{}",
+                        "{} {}: {}/{}:{}   ->   {}   cmd:{}   mounts:{}   env:{}",
                         if index == selected { "▶" } else { " " },
                         image.service_name,
                         image.namespace,
                         image.repo,
                         image.tag,
                         image.port_mapping,
+                        if image.command.is_some() { "yes" } else { "no" },
                         image.mounts.len(),
                         image.env_vars.len()
                     ))
@@ -669,6 +670,22 @@ pub fn render(frame: &mut Frame, app: &App) {
                 let widget = Paragraph::new(text)
                     .alignment(Alignment::Left)
                     .block(pane_block("Remove Env", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::SetImageCommand { image_index, input } => {
+                let image_desc = app
+                    .images
+                    .get(*image_index)
+                    .map(|entry| entry.service_name.clone())
+                    .unwrap_or_else(|| "unknown-image".to_string());
+
+                let text = format!(
+                    "Set Image Command\n\nImage: {image_desc}\n\nCommand: {}\n\nEnter: save  |  Esc: cancel\nTip: use shell form like: sh -c \"npm install && npm run dev\"\nTip: leave empty and press Enter to clear command",
+                    input
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("Command", true));
                 frame.render_widget(widget, popup);
             }
         }

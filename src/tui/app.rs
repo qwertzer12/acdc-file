@@ -7,6 +7,7 @@ pub struct ImageEntry {
     pub repo: String,
     pub tag: String,
     pub port_mapping: String,
+    pub command: Option<String>,
     pub mounts: Vec<VolumeMount>,
     pub env_vars: Vec<EnvVar>,
 }
@@ -119,6 +120,10 @@ pub enum ModalState {
     RemoveImageEnv {
         image_index: usize,
         selected_env: usize,
+    },
+    SetImageCommand {
+        image_index: usize,
+        input: String,
     },
 }
 
@@ -253,6 +258,12 @@ impl App {
                 "  {}:\n    image: {}\n    ports:\n      - \"{}\"\n",
                 image.service_name, image_ref, image.port_mapping
             ));
+
+            if let Some(command) = image.command.as_ref() {
+                if !command.is_empty() {
+                    output.push_str(&format!("    command: {}\n", command));
+                }
+            }
 
             if !image.mounts.is_empty() {
                 output.push_str("    volumes:\n");

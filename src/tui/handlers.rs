@@ -75,6 +75,10 @@ fn default_volume_name(app: &App) -> String {
     format!("volume_{}", app.volumes.len() + 1)
 }
 
+fn is_shell_command_wrapper(input: &str) -> bool {
+    input.starts_with("sh -c \"") && input.ends_with('"')
+}
+
 pub fn handle_key(app: &mut App, key_code: KeyCode) -> LoopControl {
     if app.modal.is_some() {
         return handle_modal_key(app, key_code);
@@ -160,6 +164,22 @@ pub fn handle_key(app: &mut App, key_code: KeyCode) -> LoopControl {
                                 app.push_log("edit image: adjust ports/name");
                                 return LoopControl::Continue;
                             }
+                        }
+                    }
+                    TabCommand::SetImageCommand => {
+                        if matches!(app.focus, FocusArea::Main) && !app.images.is_empty() {
+                            let index = app.images_selected.min(app.images.len() - 1);
+                            let current = app
+                                .images
+                                .get(index)
+                                .and_then(|image| image.command.clone())
+                                .unwrap_or_else(|| "sh -c \"\"".to_string());
+                            app.modal = Some(ModalState::SetImageCommand {
+                                image_index: index,
+                                input: current,
+                            });
+                            app.push_log("set command: enter container command");
+                            return LoopControl::Continue;
                         }
                     }
                     TabCommand::AddImageEnv => {
@@ -490,6 +510,9 @@ fn handle_modal_key(app: &mut App, key_code: KeyCode) -> LoopControl {
                                 repo: repo.clone(),
                                 tag: tag.clone(),
                                 port_mapping: mapping,
+                                command: existing_index
+                                    .and_then(|index| app.images.get(index))
+                                    .and_then(|image| image.command.clone()),
                                 mounts: existing_index
                                     .and_then(|index| app.images.get(index))
                                     .map(|image| image.mounts.clone())
@@ -1042,6 +1065,44 @@ fn handle_modal_key(app: &mut App, key_code: KeyCode) -> LoopControl {
                     KeyCode::Char('n') => {
                         close_modal = true;
                         deferred_logs.push("remove env canceled".to_string());
+                    }
+                    _ => {}
+                },
+                ModalState::SetImageCommand { image_index, input } => match key_code {
+                    KeyCode::Char(ch) => {
+                        if is_shell_command_wrapper(input) {
+                            let insert_at = input.len().saturating_sub(1);
+                            input.insert(insert_at, ch);
+                        } else {
+                            input.push(ch);
+                        }
+                    }
+                    KeyCode::Backspace => {
+                        if is_shell_command_wrapper(input) && input.len() > "sh -c \"\"".len() {
+                            let remove_at = input.len().saturating_sub(2);
+                            input.remove(remove_at);
+                        } else {
+                            input.pop();
+                        }
+                    }
+                    KeyCode::Enter => {
+                        if let Some(image) = app.images.get_mut(*image_index) {
+                            let raw = input.clone();
+                            if raw.trim().is_empty() {
+                                image.command = None;
+                                deferred_logs.push(format!(
+                                    "cleared command on {}",
+                                    image.service_name
+                                ));
+                            } else {
+                                image.command = Some(raw);
+                                deferred_logs.push(format!(
+                                    "updated command on {}",
+                                    image.service_name
+                                ));
+                            }
+                        }
+                        close_modal = true;
                     }
                     _ => {}
                 },
