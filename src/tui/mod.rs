@@ -54,6 +54,15 @@ fn suggested_port_mapping(app: &App, suggested_container_port: Option<u16>) -> S
     }
 }
 
+fn split_port_mapping(mapping: &str) -> (String, String) {
+    let trimmed = mapping.trim();
+    if let Some((host, container)) = trimmed.split_once(':') {
+        (host.trim().to_string(), container.trim().to_string())
+    } else {
+        (trimmed.to_string(), String::from("80"))
+    }
+}
+
 pub fn run() -> color_eyre::Result<()> {
     color_eyre::install()?;
     ratatui::run(app)?;
@@ -191,17 +200,24 @@ fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
                                         };
                                         let suggested_container_port =
                                             preferred_container_port(&suggested_ports);
+                                        let suggested_mapping = suggested_port_mapping(
+                                            &app,
+                                            suggested_container_port,
+                                        );
+                                        let (host_port_input, container_port_input) =
+                                            split_port_mapping(&suggested_mapping);
                                         next_step = Some(ModalState::ConfigureImagePorts {
                                             existing_index: None,
                                             namespace: namespace_value,
                                             repo: repo_value,
                                             tag: tag.clone(),
-                                            port_input: suggested_port_mapping(
-                                                &app,
-                                                suggested_container_port,
-                                            ),
+                                            host_port_input,
+                                            container_port_input,
                                             service_name_input: default_service_name(repo, app.images.len()),
-                                            active_field: ConfigureField::Port,
+                                            active_field: ConfigureField::HostPort,
+                                            host_port_typed: false,
+                                            container_port_typed: false,
+                                            service_name_typed: false,
                                         });
                                         if let Some(port) = suggested_container_port {
                                             deferred_logs
@@ -235,27 +251,41 @@ fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
                             namespace,
                             repo,
                             tag,
-                            port_input,
+                            host_port_input,
+                            container_port_input,
                             service_name_input,
                             active_field,
+                            host_port_typed,
+                            container_port_typed,
+                            service_name_typed,
                         } => {
                             let mut should_close_modal = false;
                             let mut log_line: Option<String> = None;
 
                             match key.code {
                                 KeyCode::Enter => {
-                                    let mapping = if port_input.trim().is_empty() {
-                                        if let Some(index) = existing_index {
-                                            app.images
-                                                .get(*index)
-                                                .map(|image| image.port_mapping.clone())
-                                                .unwrap_or_else(|| app.next_port_mapping())
-                                        } else {
-                                            app.next_port_mapping()
-                                        }
+                                    let fallback_mapping = if let Some(index) = existing_index {
+                                        app.images
+                                            .get(*index)
+                                            .map(|image| image.port_mapping.clone())
+                                            .unwrap_or_else(|| app.next_port_mapping())
                                     } else {
-                                        port_input.trim().to_string()
+                                        app.next_port_mapping()
                                     };
+                                    let (fallback_host, fallback_container) =
+                                        split_port_mapping(&fallback_mapping);
+
+                                    let host = if host_port_input.trim().is_empty() {
+                                        fallback_host
+                                    } else {
+                                        host_port_input.trim().to_string()
+                                    };
+                                    let container = if container_port_input.trim().is_empty() {
+                                        fallback_container
+                                    } else {
+                                        container_port_input.trim().to_string()
+                                    };
+                                    let mapping = format!("{host}:{container}");
 
                                     let service_name = if service_name_input.trim().is_empty() {
                                         default_service_name(repo, app.images.len())
@@ -290,33 +320,53 @@ fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
                                 }
                                 KeyCode::Backspace => {
                                     match active_field {
-                                        ConfigureField::Port => {
-                                            port_input.pop();
+                                        ConfigureField::HostPort => {
+                                            host_port_input.pop();
+                                            *host_port_typed = true;
+                                        }
+                                        ConfigureField::ContainerPort => {
+                                            container_port_input.pop();
+                                            *container_port_typed = true;
                                         }
                                         ConfigureField::Name => {
                                             service_name_input.pop();
+                                            *service_name_typed = true;
                                         }
                                     }
                                 }
                                 KeyCode::Char(ch) => {
                                     match active_field {
-                                        ConfigureField::Port => {
-                                            if ch.is_ascii_digit() || ch == ':' {
-                                                port_input.push(ch);
+                                        ConfigureField::HostPort => {
+                                            if ch.is_ascii_digit() {
+                                                if !*host_port_typed {
+                                                    host_port_input.clear();
+                                                    *host_port_typed = true;
+                                                }
+                                                host_port_input.push(ch);
+                                            }
+                                        }
+                                        ConfigureField::ContainerPort => {
+                                            if ch.is_ascii_digit() {
+                                                if !*container_port_typed {
+                                                    container_port_input.clear();
+                                                    *container_port_typed = true;
+                                                }
+                                                container_port_input.push(ch);
                                             }
                                         }
                                         ConfigureField::Name => {
                                             if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                                                if !*service_name_typed {
+                                                    service_name_input.clear();
+                                                    *service_name_typed = true;
+                                                }
                                                 service_name_input.push(ch);
                                             }
                                         }
                                     }
                                 }
                                 KeyCode::Tab => {
-                                    *active_field = match active_field {
-                                        ConfigureField::Port => ConfigureField::Name,
-                                        ConfigureField::Name => ConfigureField::Port,
-                                    };
+                                    *active_field = active_field.next();
                                 }
                                 _ => {}
                             }
@@ -477,9 +527,13 @@ fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
                                             namespace: image.namespace,
                                             repo: image.repo,
                                             tag: image.tag,
-                                            port_input: image.port_mapping,
+                                            host_port_input: split_port_mapping(&image.port_mapping).0,
+                                            container_port_input: split_port_mapping(&image.port_mapping).1,
                                             service_name_input: image.service_name,
-                                            active_field: ConfigureField::Port,
+                                            active_field: ConfigureField::HostPort,
+                                            host_port_typed: false,
+                                            container_port_typed: false,
+                                            service_name_typed: false,
                                         });
                                         app.push_log("edit image: adjust ports/name");
                                         continue;

@@ -333,12 +333,16 @@ pub fn render(frame: &mut Frame, app: &App) {
                 namespace,
                 repo,
                 tag,
-                port_input,
+                host_port_input,
+                container_port_input,
                 service_name_input,
                 active_field,
+                host_port_typed: _,
+                container_port_typed: _,
+                service_name_typed: _,
             } => {
                 let text = format!(
-                    "{}\n\nImage: {}/{}:{}\n\n{} Port mapping (host:container): {}\n{} Service name: {}\n\nTab: switch field  |  Enter: save  |  Esc: cancel",
+                    "{}\n\nImage: {}/{}:{}\n\n{} In port (host): {}\n{} Out port (container): {}\n{} Service name: {}\n\nTab: switch field  |  Enter: save  |  Esc: cancel",
                     if existing_index.is_some() {
                         "Edit Image"
                     } else {
@@ -347,8 +351,10 @@ pub fn render(frame: &mut Frame, app: &App) {
                     namespace,
                     repo,
                     tag,
-                    if matches!(active_field, ConfigureField::Port) { ">" } else { " " },
-                    port_input,
+                    if matches!(active_field, ConfigureField::HostPort) { ">" } else { " " },
+                    host_port_input,
+                    if matches!(active_field, ConfigureField::ContainerPort) { ">" } else { " " },
+                    container_port_input,
                     if matches!(active_field, ConfigureField::Name) { ">" } else { " " },
                     service_name_input
                 );

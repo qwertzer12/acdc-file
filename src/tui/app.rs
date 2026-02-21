@@ -16,8 +16,19 @@ pub struct VolumeEntry {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ConfigureField {
-    Port,
+    HostPort,
+    ContainerPort,
     Name,
+}
+
+impl ConfigureField {
+    pub fn next(self) -> Self {
+        match self {
+            ConfigureField::HostPort => ConfigureField::ContainerPort,
+            ConfigureField::ContainerPort => ConfigureField::Name,
+            ConfigureField::Name => ConfigureField::HostPort,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -39,9 +50,13 @@ pub enum ModalState {
         namespace: String,
         repo: String,
         tag: String,
-        port_input: String,
+        host_port_input: String,
+        container_port_input: String,
         service_name_input: String,
         active_field: ConfigureField,
+        host_port_typed: bool,
+        container_port_typed: bool,
+        service_name_typed: bool,
     },
     ConfirmDeleteImage {
         index: usize,
