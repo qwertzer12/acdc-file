@@ -138,11 +138,15 @@ pub fn render(frame: &mut Frame, app: &App) {
                         "n new image, e edit image, d delete image"
                     )
                 }
+                Tab::Volume => {
+                    format!(
+                        "Volumes: {}\n\nAction: {}",
+                        app.volumes.len(),
+                        "a add volume, d delete volume"
+                    )
+                }
                 Tab::Env => {
                     format!("Environment settings\nplaceholder\n\nAction: {}", tab.keybind_hint())
-                }
-                Tab::Network => {
-                    format!("Network settings\nplaceholder\n\nAction: {}", tab.keybind_hint())
                 }
             }
         } else {
@@ -164,12 +168,9 @@ pub fn render(frame: &mut Frame, app: &App) {
     let main_text = match app.active_tab {
         Tab::Project => app.compose_yaml(),
         Tab::Images => String::new(),
+        Tab::Volume => String::new(),
         Tab::Env => {
             "Env tab placeholder\n\nUse this panel for environment variables and profile toggles."
-                .to_string()
-        }
-        Tab::Network => {
-            "Network tab placeholder\n\nUse this panel for network names, drivers, and aliases."
                 .to_string()
         }
     };
@@ -209,6 +210,40 @@ pub fn render(frame: &mut Frame, app: &App) {
             .style(Style::default().fg(THEME.text_fg))
             .block(pane_block("Images", matches!(app.focus, FocusArea::Main)));
         frame.render_widget(images_panel, right[0]);
+    } else if matches!(app.active_tab, Tab::Volume) {
+        let volume_items: Vec<ListItem> = if app.volumes.is_empty() {
+            vec![
+                ListItem::new("No volumes yet."),
+                ListItem::new("Press a in Volume tab to add one."),
+            ]
+        } else {
+            let selected = app.volumes_selected.min(app.volumes.len() - 1);
+            let list_height = right[0].height.saturating_sub(2) as usize;
+            let (start, end) = visible_window(app.volumes.len(), selected, list_height.max(1));
+
+            app.volumes[start..end]
+                .iter()
+                .enumerate()
+                .map(|(offset, volume)| {
+                    let index = start + offset;
+                    ListItem::new(format!(
+                        "{} {}",
+                        if index == selected { "▶" } else { " " },
+                        volume.name
+                    ))
+                    .style(if index == selected {
+                        Style::default().add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                    })
+                })
+                .collect()
+        };
+
+        let volume_panel = List::new(volume_items)
+            .style(Style::default().fg(THEME.text_fg))
+            .block(pane_block("Volumes", matches!(app.focus, FocusArea::Main)));
+        frame.render_widget(volume_panel, right[0]);
     } else {
         let main_panel = Paragraph::new(main_text)
             .style(Style::default().fg(THEME.text_fg))
@@ -364,6 +399,15 @@ pub fn render(frame: &mut Frame, app: &App) {
                 let widget = Paragraph::new(text)
                     .alignment(Alignment::Left)
                     .block(pane_block("Confirm Write", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::AddVolume { input } => {
+                let text = format!(
+                    "Add Volume\n\nEnter volume name:\n\nName: {input}\n\nEnter: add volume\nEsc: cancel"
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("New Volume", true));
                 frame.render_widget(widget, popup);
             }
         }

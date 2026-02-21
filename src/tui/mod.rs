@@ -6,7 +6,7 @@ mod ui;
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::DefaultTerminal;
 
-use app::{App, ConfigureField, FocusArea, ImageEntry, ModalState};
+use app::{App, ConfigureField, FocusArea, ImageEntry, ModalState, VolumeEntry};
 use crate::api;
 
 fn default_service_name(repo: &str, current_len: usize) -> String {
@@ -51,7 +51,7 @@ fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
                 match key.code {
                     KeyCode::Esc => {
                         close_modal = true;
-                        deferred_logs.push("add image canceled".to_string());
+                        deferred_logs.push("modal canceled".to_string());
                     }
                     KeyCode::Char('q') => break Ok(()),
                     _ => match next_modal.as_mut() {
@@ -315,6 +315,26 @@ fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
                                 _ => {}
                             }
                         }
+                        ModalState::AddVolume { input } => {
+                            match key.code {
+                                KeyCode::Char(ch) => input.push(ch),
+                                KeyCode::Backspace => {
+                                    input.pop();
+                                }
+                                KeyCode::Enter => {
+                                    let mut name = input.trim().to_string();
+                                    if name.is_empty() {
+                                        name = format!("volume_{}", app.volumes.len() + 1);
+                                    }
+
+                                    app.volumes.push(VolumeEntry { name: name.clone() });
+                                    app.volumes_selected = app.volumes.len() - 1;
+                                    close_modal = true;
+                                    deferred_logs.push(format!("added volume {name}"));
+                                }
+                                _ => {}
+                            }
+                        }
                     },
                         None => {}
                     },
@@ -353,6 +373,12 @@ fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
                         && app.images_selected > 0
                     {
                         app.images_selected -= 1;
+                    } else if matches!(app.focus, FocusArea::Main)
+                        && matches!(app.active_tab, tab::Tab::Volume)
+                        && !app.volumes.is_empty()
+                        && app.volumes_selected > 0
+                    {
+                        app.volumes_selected -= 1;
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
@@ -363,6 +389,12 @@ fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
                         && !app.images.is_empty()
                     {
                         app.images_selected = (app.images_selected + 1).min(app.images.len() - 1);
+                    } else if matches!(app.focus, FocusArea::Main)
+                        && matches!(app.active_tab, tab::Tab::Volume)
+                        && !app.volumes.is_empty()
+                    {
+                        app.volumes_selected =
+                            (app.volumes_selected + 1).min(app.volumes.len() - 1);
                     }
                 }
                 KeyCode::Char(ch) => {
@@ -403,6 +435,30 @@ fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
                         let index = app.images_selected.min(app.images.len() - 1);
                         app.modal = Some(ModalState::ConfirmDeleteImage { index });
                         app.push_log("delete image: confirm with y");
+                        continue;
+                    }
+
+                    if matches!(app.active_tab, tab::Tab::Volume) && ch == 'a' {
+                        app.modal = Some(ModalState::AddVolume {
+                            input: String::new(),
+                        });
+                        app.push_log("add volume: enter a name");
+                        continue;
+                    }
+
+                    if matches!(app.active_tab, tab::Tab::Volume)
+                        && matches!(app.focus, FocusArea::Main)
+                        && !app.volumes.is_empty()
+                        && ch == 'd'
+                    {
+                        let index = app.volumes_selected.min(app.volumes.len() - 1);
+                        let removed = app.volumes.remove(index);
+                        if app.volumes.is_empty() {
+                            app.volumes_selected = 0;
+                        } else if app.volumes_selected >= app.volumes.len() {
+                            app.volumes_selected = app.volumes.len() - 1;
+                        }
+                        app.push_log(format!("deleted volume {}", removed.name));
                         continue;
                     }
 

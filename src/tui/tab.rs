@@ -2,39 +2,39 @@
 pub enum Tab {
     Project,
     Images,
+    Volume,
     Env,
-    Network,
 }
 
 impl Tab {
     pub fn all() -> [Self; 4] {
-        [Self::Project, Self::Images, Self::Env, Self::Network]
+        [Self::Project, Self::Images, Self::Volume, Self::Env]
     }
 
     pub fn title(self) -> &'static str {
         match self {
             Tab::Project => "Project",
             Tab::Images => "Images",
+            Tab::Volume => "Volume",
             Tab::Env => "Env",
-            Tab::Network => "Network",
         }
     }
 
     pub fn next(self) -> Self {
         match self {
             Tab::Project => Tab::Images,
-            Tab::Images => Tab::Env,
-            Tab::Env => Tab::Network,
-            Tab::Network => Tab::Project,
+            Tab::Images => Tab::Volume,
+            Tab::Volume => Tab::Env,
+            Tab::Env => Tab::Project,
         }
     }
 
     pub fn previous(self) -> Self {
         match self {
-            Tab::Project => Tab::Network,
+            Tab::Project => Tab::Env,
             Tab::Images => Tab::Project,
-            Tab::Env => Tab::Images,
-            Tab::Network => Tab::Env,
+            Tab::Volume => Tab::Images,
+            Tab::Env => Tab::Volume,
         }
     }
 
@@ -42,8 +42,8 @@ impl Tab {
         match self {
             Tab::Project => "r rename project",
             Tab::Images => "n new image, e edit image, d delete image",
+            Tab::Volume => "a add volume, d delete volume",
             Tab::Env => "e edit env",
-            Tab::Network => "w edit network",
         }
     }
 
@@ -51,8 +51,8 @@ impl Tab {
         match (self, key) {
             (Tab::Project, 'r') => Some("rename project requested"),
             (Tab::Images, 'n') => Some("new image requested"),
+            (Tab::Volume, 'a') => Some("add volume requested"),
             (Tab::Env, 'e') => Some("edit env requested"),
-            (Tab::Network, 'w') => Some("edit network requested"),
             _ => None,
         }
     }

@@ -9,6 +9,11 @@ pub struct ImageEntry {
     pub port_mapping: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct VolumeEntry {
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum ConfigureField {
     Port,
@@ -42,6 +47,9 @@ pub enum ModalState {
         index: usize,
     },
     ConfirmWriteCompose,
+    AddVolume {
+        input: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -66,6 +74,8 @@ pub struct App {
     pub command_log: Vec<String>,
     pub images: Vec<ImageEntry>,
     pub images_selected: usize,
+    pub volumes: Vec<VolumeEntry>,
+    pub volumes_selected: usize,
     pub modal: Option<ModalState>,
 }
 
@@ -83,6 +93,8 @@ impl App {
             command_log: vec!["ready".to_string()],
             images: Vec::new(),
             images_selected: 0,
+            volumes: Vec::new(),
+            volumes_selected: 0,
             modal: None,
         }
     }
@@ -126,6 +138,13 @@ impl App {
                 "  {}:\n    image: {}\n    ports:\n      - \"{}\"\n",
                 image.service_name, image_ref, image.port_mapping
             ));
+        }
+
+        if !self.volumes.is_empty() {
+            output.push_str("\nvolumes:\n");
+            for volume in &self.volumes {
+                output.push_str(&format!("  {}:\n", volume.name));
+            }
         }
 
         output
