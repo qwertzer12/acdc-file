@@ -275,7 +275,7 @@ impl App {
             if !image.env_vars.is_empty() {
                 output.push_str("    environment:\n");
                 for env in &image.env_vars {
-                    output.push_str(&format!("      - {}={}\n", env.key, env.value));
+                    output.push_str(&format!("      {}: {}\n", env.key, env.value));
                 }
             }
         }
