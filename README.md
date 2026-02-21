@@ -1,89 +1,53 @@
 # acdc
 
-`acdc` is a Rust CLI/TUI helper for discovering Docker image tags (Docker Hub) and generating container-friendly workflows.
+> Automated Creator for Docker Compose
 
-## Install
+[![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://rust-lang.org/)
+[![License](https://img.shields.io/badge/license-GPLv3-blue.svg)](#license)
 
-### From source
+## Overview
+
+A Rust-based TUI for creating Docker Compose Files.
+Created due to a desire for a tool automating this process.
+Features a searcher for Docker Images.
+
+## Quick Start
+
+### Prerequisites
+
+- Rust toolchain (`rustup`, `cargo`)
+- Optional: Docker
+
+### Build
 
 ```bash
-cargo install --path .
+cargo build --release
 ```
 
-### Homebrew (after releases are published)
+### Run
 
 ```bash
-brew tap qwertzer12/tap
-brew install acdc
+cargo run --release
 ```
 
 ## Usage
 
-Run interactive mode (TUI):
-
 ```bash
-acdc
+# Example
+acdc --help
 ```
 
-Run without TUI:
+### Common Commands
 
-```bash
-acdc --console
-```
+| Command | Description |
+| --- | --- |
+| `acdc --help` | Show available commands/options |
+| `acdc <args>` | Run the main flow |
 
-Search tags directly:
+## License
 
-```bash
-acdc search-tags library nginx "alpine" --limit 15
-```
+This project is licensed under the GNU General Public License v3.0 (GPLv3).
 
-Auto-resolve image and search tags:
+---
 
-```bash
-acdc auto-tags nginx "alpine" --limit 15
-```
-
-Generate shell completions:
-
-```bash
-acdc completions bash > /etc/bash_completion.d/acdc
-```
-
-## Release with cargo-dist
-
-This project uses `cargo-dist` with GitHub Releases and Homebrew publishing.
-
-### Why CI failed with “release.yml has out of date contents”
-
-You enabled Homebrew publishing in `dist-workspace.toml`:
-
-- `installers = ["shell", "powershell", "homebrew"]`
-- `publish-jobs = ["homebrew"]`
-- `tap = "qwertzer12/homebrew-tap"`
-
-When those settings change, `cargo-dist` expects `.github/workflows/release.yml` to be regenerated. CI failed because the checked-in workflow does not yet include the new Homebrew publish job.
-
-### Fix
-
-Run this locally and commit the generated workflow changes:
-
-```bash
-dist init
-git add .github/workflows/release.yml dist-workspace.toml Cargo.toml
-git commit -m "chore(dist): regenerate release workflow for homebrew publishing"
-git push
-```
-
-After that, rerun the release workflow.
-
-### Required GitHub secret
-
-For pushing formula updates to your tap repo, set:
-
-- `HOMEBREW_TAP_TOKEN` (PAT with write access to `qwertzer12/homebrew-tap`)
-
-`GITHUB_TOKEN` is already provided by GitHub Actions for release creation.
-
-### Optional (not recommended)
-
-You can bypass the out-of-date check with `allow-dirty` in `Cargo.toml`, but this may hide real CI drift. Regenerating with `dist init` is the correct fix.
+If useful, add screenshots/GIFs under a `docs/` folder and link them in this README.
