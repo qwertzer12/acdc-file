@@ -29,6 +29,31 @@ fn default_service_name(repo: &str, current_len: usize) -> String {
     }
 }
 
+fn preferred_container_port(ports: &[u16]) -> Option<u16> {
+    let preferred = [80, 443, 8080, 3000, 5000, 5432, 3306, 6379];
+    for candidate in preferred {
+        if ports.contains(&candidate) {
+            return Some(candidate);
+        }
+    }
+    ports.first().copied()
+}
+
+fn suggested_port_mapping(app: &App, suggested_container_port: Option<u16>) -> String {
+    let fallback = app.next_port_mapping();
+    let host = fallback
+        .split(':')
+        .next()
+        .unwrap_or("8000")
+        .to_string();
+
+    if let Some(container) = suggested_container_port {
+        format!("{host}:{container}")
+    } else {
+        fallback
+    }
+}
+
 pub fn run() -> color_eyre::Result<()> {
     color_eyre::install()?;
     ratatui::run(app)?;
@@ -138,15 +163,50 @@ fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
                                     if let Some(tag) = filtered_tags.get(*selected).cloned() {
                                         let namespace_value = namespace.clone();
                                         let repo_value = repo.clone();
+                                        let runtime = tokio::runtime::Builder::new_current_thread()
+                                            .enable_all()
+                                            .build();
+                                        let suggested_ports = match runtime {
+                                            Ok(runtime) => match runtime.block_on(
+                                                api::list_docker_hub_exposed_ports(
+                                                    &namespace_value,
+                                                    &repo_value,
+                                                    &tag,
+                                                ),
+                                            ) {
+                                                Ok(ports) => ports,
+                                                Err(error) => {
+                                                    deferred_logs.push(format!(
+                                                        "port suggestions unavailable: {error}"
+                                                    ));
+                                                    Vec::new()
+                                                }
+                                            },
+                                            Err(error) => {
+                                                deferred_logs.push(format!(
+                                                    "runtime error for port suggestion: {error}"
+                                                ));
+                                                Vec::new()
+                                            }
+                                        };
+                                        let suggested_container_port =
+                                            preferred_container_port(&suggested_ports);
                                         next_step = Some(ModalState::ConfigureImagePorts {
                                             existing_index: None,
                                             namespace: namespace_value,
                                             repo: repo_value,
                                             tag: tag.clone(),
-                                            port_input: app.next_port_mapping(),
+                                            port_input: suggested_port_mapping(
+                                                &app,
+                                                suggested_container_port,
+                                            ),
                                             service_name_input: default_service_name(repo, app.images.len()),
                                             active_field: ConfigureField::Port,
                                         });
+                                        if let Some(port) = suggested_container_port {
+                                            deferred_logs
+                                                .push(format!("suggested container port {port}"));
+                                        }
                                     }
                                 }
                                 KeyCode::Backspace => {

@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use super::{ApiError, search_docker_hub_tags};
+use super::{ApiError, http_client, search_docker_hub_tags};
 
 #[derive(Debug, Deserialize)]
 struct RepoSearchResponse {
@@ -81,12 +81,11 @@ pub async fn resolve_docker_hub_repository(term: &str) -> Result<Option<Resolved
         }
     }
 
-    let client = reqwest::Client::new();
     let encoded_term = input.replace(' ', "%20");
     let search_url = format!(
         "https://hub.docker.com/v2/search/repositories/?query={encoded_term}&page_size=25"
     );
-    let response: RepoSearchResponse = client
+    let response: RepoSearchResponse = http_client()
         .get(search_url)
         .send()
         .await?

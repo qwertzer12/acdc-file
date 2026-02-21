@@ -2,7 +2,9 @@ mod docker_hub;
 mod ranking;
 mod repo_resolution;
 
-pub use docker_hub::list_docker_hub_tags;
+use std::sync::OnceLock;
+
+pub use docker_hub::{list_docker_hub_exposed_ports, list_docker_hub_tags};
 pub use ranking::{filter_tags, search_docker_hub_tags};
 pub use repo_resolution::{
     auto_search_docker_hub_tags,
@@ -10,6 +12,12 @@ pub use repo_resolution::{
 };
 
 pub type ApiError = Box<dyn std::error::Error + Send + Sync>;
+
+static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+pub(crate) fn http_client() -> &'static reqwest::Client {
+    HTTP_CLIENT.get_or_init(reqwest::Client::new)
+}
 
 async fn run_test(repo: &str) -> Result<(), ApiError> {
     let namespace = "library";
