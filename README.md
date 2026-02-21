@@ -1,4 +1,4 @@
-# acdc
+# ACDC
 
 > Automated Creator for Docker Compose
 
