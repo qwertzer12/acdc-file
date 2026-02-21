@@ -7,6 +7,13 @@ pub struct ImageEntry {
     pub repo: String,
     pub tag: String,
     pub port_mapping: String,
+    pub mounts: Vec<VolumeMount>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VolumeMount {
+    pub source: String,
+    pub target: String,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +72,67 @@ pub enum ModalState {
     AddVolume {
         input: String,
     },
+    SelectImageVolumeSource {
+        image_index: usize,
+        selected_option: usize,
+    },
+    MountExistingVolume {
+        image_index: usize,
+        selected_volume: usize,
+        target_input: String,
+        active_field: MountExistingField,
+        target_typed: bool,
+    },
+    MountNewVolume {
+        image_index: usize,
+        new_volume_input: String,
+        target_input: String,
+        active_field: MountInputField,
+        new_volume_typed: bool,
+        target_typed: bool,
+    },
+    MountLocalPath {
+        image_index: usize,
+        local_path_input: String,
+        target_input: String,
+        active_field: MountInputField,
+        local_path_typed: bool,
+        target_typed: bool,
+    },
+    RemoveImageMount {
+        image_index: usize,
+        selected_mount: usize,
+    },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MountExistingField {
+    Volume,
+    Target,
+}
+
+impl MountExistingField {
+    pub fn next(self) -> Self {
+        match self {
+            MountExistingField::Volume => MountExistingField::Target,
+            MountExistingField::Target => MountExistingField::Volume,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MountInputField {
+    Source,
+    Target,
+}
+
+impl MountInputField {
+    pub fn next(self) -> Self {
+        match self {
+            MountInputField::Source => MountInputField::Target,
+            MountInputField::Target => MountInputField::Source,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -153,6 +221,16 @@ impl App {
                 "  {}:\n    image: {}\n    ports:\n      - \"{}\"\n",
                 image.service_name, image_ref, image.port_mapping
             ));
+
+            if !image.mounts.is_empty() {
+                output.push_str("    volumes:\n");
+                for mount in &image.mounts {
+                    output.push_str(&format!(
+                        "      - \"{}:{}\"\n",
+                        mount.source, mount.target
+                    ));
+                }
+            }
         }
 
         if !self.volumes.is_empty() {

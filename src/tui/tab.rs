@@ -11,6 +11,8 @@ pub enum TabCommand {
     NewImage,
     EditImage,
     DeleteImage,
+    MountImageVolume,
+    RemoveImageVolume,
     AddVolume,
     DeleteVolume,
     EditEnv,
@@ -59,7 +61,7 @@ impl Tab {
     pub fn keybind_hint(self) -> &'static str {
         match self {
             Tab::Project => "r rename project",
-            Tab::Images => "n new image, e edit image, d delete image",
+            Tab::Images => "n new image, e edit image, d delete image, v mount volume, u unmount",
             Tab::Volume => "a add volume, d delete volume",
             Tab::Env => "e edit env",
         }
@@ -68,7 +70,13 @@ impl Tab {
     pub fn action_labels(self) -> &'static [&'static str] {
         match self {
             Tab::Project => &["R: rename project"],
-            Tab::Images => &["N: new image", "E: edit image", "D: delete image"],
+            Tab::Images => &[
+                "N: new image",
+                "E: edit image",
+                "D: delete image",
+                "V: mount volume",
+                "U: unmount volume",
+            ],
             Tab::Volume => &["A: add volume", "D: delete volume"],
             Tab::Env => &["E: edit env"],
         }
@@ -104,6 +112,8 @@ impl Tab {
             (Tab::Images, 'n') => Some(TabCommand::NewImage),
             (Tab::Images, 'e') => Some(TabCommand::EditImage),
             (Tab::Images, 'd') => Some(TabCommand::DeleteImage),
+            (Tab::Images, 'v') => Some(TabCommand::MountImageVolume),
+            (Tab::Images, 'u') => Some(TabCommand::RemoveImageVolume),
             (Tab::Volume, 'a') => Some(TabCommand::AddVolume),
             (Tab::Volume, 'd') => Some(TabCommand::DeleteVolume),
             (Tab::Env, 'e') => Some(TabCommand::EditEnv),
@@ -115,6 +125,8 @@ impl Tab {
         match (self, key) {
             (Tab::Project, 'r') => Some("rename project requested"),
             (Tab::Images, 'n') => Some("new image requested"),
+            (Tab::Images, 'v') => Some("mount volume requested"),
+            (Tab::Images, 'u') => Some("unmount volume requested"),
             (Tab::Volume, 'a') => Some("add volume requested"),
             (Tab::Env, 'e') => Some("edit env requested"),
             _ => None,

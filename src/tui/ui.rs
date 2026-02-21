@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::tui::{
-    app::{App, ConfigureField, FocusArea, ModalState},
+    app::{App, ConfigureField, FocusArea, ModalState, MountExistingField, MountInputField},
     tab::{Tab, TabStats},
     theme::THEME,
 };
@@ -180,10 +180,14 @@ pub fn render(frame: &mut Frame, app: &App) {
                 .map(|(offset, image)| {
                     let index = start + offset;
                     ListItem::new(format!(
-                        "{} {}: {}/{}:{}   ->   {}",
+                        "{} {}: {}/{}:{}   ->   {}   mounts:{}",
                         if index == selected { "▶" } else { " " },
                         image.service_name,
-                        image.namespace, image.repo, image.tag, image.port_mapping
+                        image.namespace,
+                        image.repo,
+                        image.tag,
+                        image.port_mapping,
+                        image.mounts.len()
                     ))
                     .style(if index == selected {
                         Style::default().add_modifier(Modifier::BOLD)
@@ -402,6 +406,194 @@ pub fn render(frame: &mut Frame, app: &App) {
                 let widget = Paragraph::new(text)
                     .alignment(Alignment::Left)
                     .block(pane_block("New Volume", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::SelectImageVolumeSource {
+                image_index,
+                selected_option,
+            } => {
+                let image_desc = app
+                    .images
+                    .get(*image_index)
+                    .map(|image| {
+                        format!(
+                            "{}: {}/{}:{}",
+                            image.service_name, image.namespace, image.repo, image.tag
+                        )
+                    })
+                    .unwrap_or_else(|| "selected image not found".to_string());
+
+                let options = [
+                    "Use existing named volume",
+                    "Create and mount a new named volume",
+                    "Use local path (./ or /usr/...)",
+                ];
+
+                let options_text = options
+                    .iter()
+                    .enumerate()
+                    .map(|(index, label)| {
+                        if index == *selected_option {
+                            format!("> {label}")
+                        } else {
+                            format!("  {label}")
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                let text = format!(
+                    "Mount Volume\n\nImage: {image_desc}\n\n{options_text}\n\nj/k or arrows: move  |  Enter: choose  |  Esc: cancel"
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("Mount Source", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::MountExistingVolume {
+                image_index,
+                selected_volume,
+                target_input,
+                active_field,
+                target_typed: _,
+            } => {
+                let image_desc = app
+                    .images
+                    .get(*image_index)
+                    .map(|image| image.service_name.clone())
+                    .unwrap_or_else(|| "unknown-image".to_string());
+
+                let volume_name = app
+                    .volumes
+                    .get((*selected_volume).min(app.volumes.len().saturating_sub(1)))
+                    .map(|volume| volume.name.clone())
+                    .unwrap_or_else(|| "<no volume>".to_string());
+
+                let text = format!(
+                    "Mount Existing Volume\n\nImage: {image_desc}\n\n{} Volume: {}\n{} Container path: {}\n\nTab: switch field  |  j/k: volume select  |  Enter: mount  |  Esc: cancel",
+                    if matches!(active_field, MountExistingField::Volume) {
+                        ">"
+                    } else {
+                        " "
+                    },
+                    volume_name,
+                    if matches!(active_field, MountExistingField::Target) {
+                        ">"
+                    } else {
+                        " "
+                    },
+                    target_input
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("Mount Existing", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::MountNewVolume {
+                image_index,
+                new_volume_input,
+                target_input,
+                active_field,
+                new_volume_typed: _,
+                target_typed: _,
+            } => {
+                let image_desc = app
+                    .images
+                    .get(*image_index)
+                    .map(|image| image.service_name.clone())
+                    .unwrap_or_else(|| "unknown-image".to_string());
+
+                let text = format!(
+                    "Mount New Volume\n\nImage: {image_desc}\n\n{} Volume name: {}\n{} Container path: {}\n\nTab: switch field  |  Enter: create + mount  |  Esc: cancel",
+                    if matches!(active_field, MountInputField::Source) {
+                        ">"
+                    } else {
+                        " "
+                    },
+                    new_volume_input,
+                    if matches!(active_field, MountInputField::Target) {
+                        ">"
+                    } else {
+                        " "
+                    },
+                    target_input
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("Mount New", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::MountLocalPath {
+                image_index,
+                local_path_input,
+                target_input,
+                active_field,
+                local_path_typed: _,
+                target_typed: _,
+            } => {
+                let image_desc = app
+                    .images
+                    .get(*image_index)
+                    .map(|image| image.service_name.clone())
+                    .unwrap_or_else(|| "unknown-image".to_string());
+
+                let text = format!(
+                    "Mount Local Path\n\nImage: {image_desc}\n\n{} Local source path: {}\n{} Container path: {}\n\nSource must start with ./ or /\nTab: switch field  |  Enter: mount  |  Esc: cancel",
+                    if matches!(active_field, MountInputField::Source) {
+                        ">"
+                    } else {
+                        " "
+                    },
+                    local_path_input,
+                    if matches!(active_field, MountInputField::Target) {
+                        ">"
+                    } else {
+                        " "
+                    },
+                    target_input
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("Mount Local", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::RemoveImageMount {
+                image_index,
+                selected_mount,
+            } => {
+                let image = app.images.get(*image_index);
+                let image_desc = image
+                    .map(|entry| entry.service_name.clone())
+                    .unwrap_or_else(|| "unknown-image".to_string());
+
+                let mounts_text = if let Some(entry) = image {
+                    if entry.mounts.is_empty() {
+                        "No mounted volumes on this image.".to_string()
+                    } else {
+                        entry
+                            .mounts
+                            .iter()
+                            .enumerate()
+                            .map(|(index, mount)| {
+                                if index == *selected_mount {
+                                    format!("> {}:{}", mount.source, mount.target)
+                                } else {
+                                    format!("  {}:{}", mount.source, mount.target)
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    }
+                } else {
+                    "Selected image not found.".to_string()
+                };
+
+                let text = format!(
+                    "Unmount Volume\n\nImage: {image_desc}\n\n{mounts_text}\n\nj/k or arrows: move  |  Enter/y: remove  |  n/Esc: cancel"
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("Unmount", true));
                 frame.render_widget(widget, popup);
             }
         }
