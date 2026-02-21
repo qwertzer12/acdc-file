@@ -1,4 +1,5 @@
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{Shell, generate};
 mod api;
 mod tui;
 
@@ -36,6 +37,10 @@ enum Commands {
         query: String,
         #[arg(short, long, default_value_t = 15)]
         limit: usize,
+    },
+    Completions {
+        #[arg(value_enum)]
+        shell: Shell,
     },
 }
 
@@ -103,6 +108,10 @@ fn main() {
                     println!("No repository found for image term '{image}'");
                 }
             }
+        }
+        Some(Commands::Completions { shell }) => {
+            let mut cmd = Cli::command();
+            generate(shell, &mut cmd, "acdc", &mut std::io::stdout());
         }
     }
 }
