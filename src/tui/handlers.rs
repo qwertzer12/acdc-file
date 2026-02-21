@@ -3,8 +3,8 @@ use crossterm::event::KeyCode;
 use crate::api;
 use crate::tui::{
     app::{
-        App, ConfigureField, FocusArea, ImageEntry, ModalState, MountExistingField,
-        MountInputField, VolumeEntry, VolumeMount,
+        App, ConfigureField, EnvInputField, EnvVar, FocusArea, ImageEntry, ModalState,
+        MountExistingField, MountInputField, VolumeEntry, VolumeMount,
     },
     tab::{Tab, TabCommand},
 };
@@ -158,6 +158,34 @@ pub fn handle_key(app: &mut App, key_code: KeyCode) -> LoopControl {
                                     service_name_typed: false,
                                 });
                                 app.push_log("edit image: adjust ports/name");
+                                return LoopControl::Continue;
+                            }
+                        }
+                    }
+                    TabCommand::AddImageEnv => {
+                        if matches!(app.focus, FocusArea::Main) && !app.images.is_empty() {
+                            let index = app.images_selected.min(app.images.len() - 1);
+                            app.modal = Some(ModalState::AddImageEnv {
+                                image_index: index,
+                                key_input: String::new(),
+                                value_input: String::new(),
+                                active_field: EnvInputField::Key,
+                            });
+                            app.push_log("add env: enter variable and value");
+                            return LoopControl::Continue;
+                        }
+                    }
+                    TabCommand::RemoveImageEnv => {
+                        if matches!(app.focus, FocusArea::Main) && !app.images.is_empty() {
+                            let index = app.images_selected.min(app.images.len() - 1);
+                            if app.images[index].env_vars.is_empty() {
+                                app.push_log("selected image has no env vars");
+                            } else {
+                                app.modal = Some(ModalState::RemoveImageEnv {
+                                    image_index: index,
+                                    selected_env: 0,
+                                });
+                                app.push_log("remove env: pick variable and confirm");
                                 return LoopControl::Continue;
                             }
                         }
@@ -465,6 +493,10 @@ fn handle_modal_key(app: &mut App, key_code: KeyCode) -> LoopControl {
                                 mounts: existing_index
                                     .and_then(|index| app.images.get(index))
                                     .map(|image| image.mounts.clone())
+                                    .unwrap_or_default(),
+                                env_vars: existing_index
+                                    .and_then(|index| app.images.get(index))
+                                    .map(|image| image.env_vars.clone())
                                     .unwrap_or_default(),
                             };
 
@@ -914,6 +946,102 @@ fn handle_modal_key(app: &mut App, key_code: KeyCode) -> LoopControl {
                     KeyCode::Char('n') => {
                         close_modal = true;
                         deferred_logs.push("unmount canceled".to_string());
+                    }
+                    _ => {}
+                },
+                ModalState::AddImageEnv {
+                    image_index,
+                    key_input,
+                    value_input,
+                    active_field,
+                } => match key_code {
+                    KeyCode::Backspace => match active_field {
+                        EnvInputField::Key => {
+                            key_input.pop();
+                        }
+                        EnvInputField::Value => {
+                            value_input.pop();
+                        }
+                    },
+                    KeyCode::Char(ch) => match active_field {
+                        EnvInputField::Key => {
+                            if ch.is_ascii_alphanumeric() || ch == '_' {
+                                key_input.push(ch.to_ascii_uppercase());
+                            }
+                        }
+                        EnvInputField::Value => {
+                            value_input.push(ch);
+                        }
+                    },
+                    KeyCode::Tab => {
+                        *active_field = active_field.next();
+                    }
+                    KeyCode::Enter => {
+                        let key = key_input.trim().to_ascii_uppercase();
+                        if key.is_empty() {
+                            deferred_logs.push("env variable name is required".to_string());
+                        } else if let Some(image) = app.images.get_mut(*image_index) {
+                            let value = value_input.clone();
+                            if let Some(existing) =
+                                image.env_vars.iter_mut().find(|env| env.key == key)
+                            {
+                                existing.value = value.clone();
+                                deferred_logs.push(format!(
+                                    "updated env {key} on {}",
+                                    image.service_name
+                                ));
+                            } else {
+                                image.env_vars.push(EnvVar {
+                                    key: key.clone(),
+                                    value: value.clone(),
+                                });
+                                deferred_logs.push(format!(
+                                    "added env {key} on {}",
+                                    image.service_name
+                                ));
+                            }
+                            close_modal = true;
+                        }
+                    }
+                    _ => {}
+                },
+                ModalState::RemoveImageEnv {
+                    image_index,
+                    selected_env,
+                } => match key_code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if *selected_env > 0 {
+                            *selected_env -= 1;
+                        }
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if let Some(image) = app.images.get(*image_index) {
+                            if !image.env_vars.is_empty() {
+                                *selected_env = (*selected_env + 1).min(image.env_vars.len() - 1);
+                            }
+                        }
+                    }
+                    KeyCode::Enter | KeyCode::Char('y') => {
+                        if let Some(image) = app.images.get_mut(*image_index) {
+                            if !image.env_vars.is_empty() {
+                                let index = (*selected_env).min(image.env_vars.len() - 1);
+                                let removed = image.env_vars.remove(index);
+                                if !image.env_vars.is_empty() && *selected_env >= image.env_vars.len() {
+                                    *selected_env = image.env_vars.len() - 1;
+                                }
+                                deferred_logs.push(format!(
+                                    "removed env {} from {}",
+                                    removed.key, image.service_name
+                                ));
+                            } else {
+                                deferred_logs.push("selected image has no env vars".to_string());
+                            }
+                        }
+                        close_modal = true;
+                    }
+                    KeyCode::Char('n') => {
+                        close_modal = true;
+                        deferred_logs.push("remove env canceled".to_string());
                     }
                     _ => {}
                 },

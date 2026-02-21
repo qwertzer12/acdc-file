@@ -6,7 +6,10 @@ use ratatui::{
 };
 
 use crate::tui::{
-    app::{App, ConfigureField, FocusArea, ModalState, MountExistingField, MountInputField},
+    app::{
+        App, ConfigureField, EnvInputField, FocusArea, ModalState, MountExistingField,
+        MountInputField,
+    },
     tab::{Tab, TabStats},
     theme::THEME,
 };
@@ -180,14 +183,15 @@ pub fn render(frame: &mut Frame, app: &App) {
                 .map(|(offset, image)| {
                     let index = start + offset;
                     ListItem::new(format!(
-                        "{} {}: {}/{}:{}   ->   {}   mounts:{}",
+                        "{} {}: {}/{}:{}   ->   {}   mounts:{}   env:{}",
                         if index == selected { "▶" } else { " " },
                         image.service_name,
                         image.namespace,
                         image.repo,
                         image.tag,
                         image.port_mapping,
-                        image.mounts.len()
+                        image.mounts.len(),
+                        image.env_vars.len()
                     ))
                     .style(if index == selected {
                         Style::default().add_modifier(Modifier::BOLD)
@@ -594,6 +598,77 @@ pub fn render(frame: &mut Frame, app: &App) {
                 let widget = Paragraph::new(text)
                     .alignment(Alignment::Left)
                     .block(pane_block("Unmount", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::AddImageEnv {
+                image_index,
+                key_input,
+                value_input,
+                active_field,
+            } => {
+                let image_desc = app
+                    .images
+                    .get(*image_index)
+                    .map(|entry| entry.service_name.clone())
+                    .unwrap_or_else(|| "unknown-image".to_string());
+
+                let text = format!(
+                    "Add Env Variable\n\nImage: {image_desc}\n\n{} Variable: {}\n{} Value: {}\n\nName auto-uppercases. Value is kept exactly as typed.\nTab: switch field  |  Enter: save  |  Esc: cancel",
+                    if matches!(active_field, EnvInputField::Key) {
+                        ">"
+                    } else {
+                        " "
+                    },
+                    key_input,
+                    if matches!(active_field, EnvInputField::Value) {
+                        ">"
+                    } else {
+                        " "
+                    },
+                    value_input
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("Env", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::RemoveImageEnv {
+                image_index,
+                selected_env,
+            } => {
+                let image = app.images.get(*image_index);
+                let image_desc = image
+                    .map(|entry| entry.service_name.clone())
+                    .unwrap_or_else(|| "unknown-image".to_string());
+
+                let env_text = if let Some(entry) = image {
+                    if entry.env_vars.is_empty() {
+                        "No env vars on this image.".to_string()
+                    } else {
+                        entry
+                            .env_vars
+                            .iter()
+                            .enumerate()
+                            .map(|(index, env)| {
+                                if index == *selected_env {
+                                    format!("> {}={}", env.key, env.value)
+                                } else {
+                                    format!("  {}={}", env.key, env.value)
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    }
+                } else {
+                    "Selected image not found.".to_string()
+                };
+
+                let text = format!(
+                    "Remove Env Variable\n\nImage: {image_desc}\n\n{env_text}\n\nj/k or arrows: move  |  Enter/y: remove  |  n/Esc: cancel"
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("Remove Env", true));
                 frame.render_widget(widget, popup);
             }
         }

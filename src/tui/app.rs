@@ -8,12 +8,19 @@ pub struct ImageEntry {
     pub tag: String,
     pub port_mapping: String,
     pub mounts: Vec<VolumeMount>,
+    pub env_vars: Vec<EnvVar>,
 }
 
 #[derive(Debug, Clone)]
 pub struct VolumeMount {
     pub source: String,
     pub target: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnvVar {
+    pub key: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +110,31 @@ pub enum ModalState {
         image_index: usize,
         selected_mount: usize,
     },
+    AddImageEnv {
+        image_index: usize,
+        key_input: String,
+        value_input: String,
+        active_field: EnvInputField,
+    },
+    RemoveImageEnv {
+        image_index: usize,
+        selected_env: usize,
+    },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum EnvInputField {
+    Key,
+    Value,
+}
+
+impl EnvInputField {
+    pub fn next(self) -> Self {
+        match self {
+            EnvInputField::Key => EnvInputField::Value,
+            EnvInputField::Value => EnvInputField::Key,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -229,6 +261,13 @@ impl App {
                         "      - \"{}:{}\"\n",
                         mount.source, mount.target
                     ));
+                }
+            }
+
+            if !image.env_vars.is_empty() {
+                output.push_str("    environment:\n");
+                for env in &image.env_vars {
+                    output.push_str(&format!("      - {}={}\n", env.key, env.value));
                 }
             }
         }
