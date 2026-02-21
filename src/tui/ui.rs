@@ -11,6 +11,12 @@ use crate::tui::{
     theme::THEME,
 };
 
+const ACTION_SPACING: &str = "\n        ";
+
+fn actions_text(actions: &[&str]) -> String {
+    actions.join(ACTION_SPACING)
+}
+
 fn visible_window(total: usize, selected: usize, view_height: usize) -> (usize, usize) {
     if total == 0 || view_height == 0 {
         return (0, 0);
@@ -128,29 +134,37 @@ pub fn render(frame: &mut Frame, app: &App) {
                 Tab::Project => format!(
                     "Directory: {}\nTemp: 74°C\nCPU: 12%\nMem: 418MB\n\nAction: {}",
                     app.project_name,
-                    tab.keybind_hint()
+                    actions_text(&["R: rename project"])
                 ),
                 Tab::Images => {
                     format!(
                         "Loaded images: {}\nExposed ports: {}\n\nAction: {}",
                         app.images.len(),
                         app.total_exposed_ports(),
-                        "n new image, e edit image, d delete image"
+                        actions_text(&["N: new image", "E: edit image", "D: delete image"])
                     )
                 }
                 Tab::Volume => {
                     format!(
                         "Volumes: {}\n\nAction: {}",
                         app.volumes.len(),
-                        "a add volume, d delete volume"
+                        actions_text(&["A: add volume", "D: delete volume"])
                     )
                 }
                 Tab::Env => {
-                    format!("Environment settings\nplaceholder\n\nAction: {}", tab.keybind_hint())
+                    format!(
+                        "Environment settings\nplaceholder\n\nAction: {}",
+                        actions_text(&["E: edit env"])
+                    )
                 }
             }
         } else {
-            format!("Action: {}", tab.keybind_hint())
+            match tab {
+                Tab::Project => "Compose preview".to_string(),
+                Tab::Images => format!("{} images", app.images.len()),
+                Tab::Volume => format!("{} volumes", app.volumes.len()),
+                Tab::Env => "Env vars".to_string(),
+            }
         };
 
         let style = if is_active {
