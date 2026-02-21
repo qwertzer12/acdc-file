@@ -28,5 +28,5 @@ path = "src/main.rs"
 inherits = "release"
 lto = "thin"
 
-[package.metadata.dist]
-formula = "acdc"
+# [package.metadata.dist]
+# formula = "acdc"
