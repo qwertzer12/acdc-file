@@ -1,15 +1,53 @@
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
 
 use crate::tui::{
-    app::{App, FocusArea},
+    app::{App, ConfigureField, FocusArea, ModalState},
     tab::Tab,
     theme::THEME,
 };
+
+fn visible_window(total: usize, selected: usize, view_height: usize) -> (usize, usize) {
+    if total == 0 || view_height == 0 {
+        return (0, 0);
+    }
+
+    if total <= view_height {
+        return (0, total);
+    }
+
+    let half = view_height / 2;
+    let mut start = selected.saturating_sub(half);
+    if start + view_height > total {
+        start = total - view_height;
+    }
+
+    (start, start + view_height)
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(area);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
 
 fn pane_block(title: &str, active: bool) -> Block<'_> {
     let border_style = if active {
@@ -93,7 +131,12 @@ pub fn render(frame: &mut Frame, app: &App) {
                     tab.keybind_hint()
                 ),
                 Tab::Images => {
-                    format!("Loaded images: 3\nExposed ports: 3\n\nAction: {}", tab.keybind_hint())
+                    format!(
+                        "Loaded images: {}\nExposed ports: {}\n\nAction: {}",
+                        app.images.len(),
+                        app.total_exposed_ports(),
+                        "n new image, e edit image, d delete image"
+                    )
                 }
                 Tab::Env => {
                     format!("Environment settings\nplaceholder\n\nAction: {}", tab.keybind_hint())
@@ -119,20 +162,59 @@ pub fn render(frame: &mut Frame, app: &App) {
     }
 
     let main_text = match app.active_tab {
-        Tab::Project => {
-            "version: \"3.9\"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - \"8080:80\"\n  db:\n    image: postgres:16\n    ports:\n      - \"5432:5432\"\n"
+        Tab::Project => app.compose_yaml(),
+        Tab::Images => String::new(),
+        Tab::Env => {
+            "Env tab placeholder\n\nUse this panel for environment variables and profile toggles."
+                .to_string()
         }
-        Tab::Images => {
-            "nginx:latest         -> 8080:80\npostgres:16          -> 5432:5432\nredis:7-alpine       -> 6379:6379"
+        Tab::Network => {
+            "Network tab placeholder\n\nUse this panel for network names, drivers, and aliases."
+                .to_string()
         }
-        Tab::Env => "Env tab placeholder\n\nUse this panel for environment variables and profile toggles.",
-        Tab::Network => "Network tab placeholder\n\nUse this panel for network names, drivers, and aliases.",
     };
 
-    let main_panel = Paragraph::new(main_text)
-        .style(Style::default().fg(THEME.text_fg))
-        .block(pane_block(app.active_tab.title(), matches!(app.focus, FocusArea::Main)));
-    frame.render_widget(main_panel, right[0]);
+    if matches!(app.active_tab, Tab::Images) {
+        let image_items: Vec<ListItem> = if app.images.is_empty() {
+            vec![
+                ListItem::new("No images yet."),
+                ListItem::new("Press n in Images tab to add one."),
+            ]
+        } else {
+            let selected = app.images_selected.min(app.images.len() - 1);
+            let list_height = right[0].height.saturating_sub(2) as usize;
+            let (start, end) = visible_window(app.images.len(), selected, list_height.max(1));
+
+            app.images[start..end]
+                .iter()
+                .enumerate()
+                .map(|(offset, image)| {
+                    let index = start + offset;
+                    ListItem::new(format!(
+                        "{} {}: {}/{}:{}   ->   {}",
+                        if index == selected { "▶" } else { " " },
+                        image.service_name,
+                        image.namespace, image.repo, image.tag, image.port_mapping
+                    ))
+                    .style(if index == selected {
+                        Style::default().add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                    })
+                })
+                .collect()
+        };
+
+        let images_panel = List::new(image_items)
+            .style(Style::default().fg(THEME.text_fg))
+            .block(pane_block("Images", matches!(app.focus, FocusArea::Main)));
+        frame.render_widget(images_panel, right[0]);
+    } else {
+        let main_panel = Paragraph::new(main_text)
+            .style(Style::default().fg(THEME.text_fg))
+            .block(pane_block(app.active_tab.title(), matches!(app.focus, FocusArea::Main)));
+        frame.render_widget(main_panel, right[0]);
+    }
 
     let log_items: Vec<ListItem> = app
         .command_log
@@ -152,4 +234,138 @@ pub fn render(frame: &mut Frame, app: &App) {
         .style(Style::default().fg(THEME.footer_fg))
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(footer, root[2]);
+
+    if let Some(modal) = &app.modal {
+        let popup = centered_rect(70, 70, area);
+        frame.render_widget(Clear, popup);
+
+        match modal {
+            ModalState::AddImageType { input } => {
+                let text = format!(
+                    "Add New Image\n\nType image name/org (examples: python, nginx, node)\n\nImage: {input}\n\nEnter: resolve and fetch tags\nEsc: cancel"
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("New Image", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::SelectImageTag {
+                image_term,
+                namespace,
+                repo,
+                query,
+                filtered_tags,
+                selected,
+                ..
+            } => {
+                let sections = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(6),
+                        Constraint::Min(8),
+                        Constraint::Length(3),
+                    ])
+                    .split(popup);
+
+                let header_text = format!(
+                    "Resolved image term: {image_term}\nUsing repo: {}/{}\nFilter tags: {}",
+                    namespace, repo, query
+                );
+                let header = Paragraph::new(header_text).block(pane_block("Select Tag", true));
+                frame.render_widget(header, sections[0]);
+
+                let tag_items: Vec<ListItem> = if filtered_tags.is_empty() {
+                    vec![ListItem::new("No tags match this query.")]
+                } else {
+                    let selected = (*selected).min(filtered_tags.len() - 1);
+                    let view_height = sections[1].height.saturating_sub(2) as usize;
+                    let (start, end) = visible_window(filtered_tags.len(), selected, view_height.max(1));
+
+                    filtered_tags[start..end]
+                        .iter()
+                        .enumerate()
+                        .map(|(offset, tag)| {
+                            let index = start + offset;
+                            if index == selected {
+                                ListItem::new(format!("▶ {tag}"))
+                                    .style(Style::default().add_modifier(Modifier::BOLD))
+                            } else {
+                                ListItem::new(format!("  {tag}"))
+                            }
+                        })
+                        .collect()
+                };
+                let tags = List::new(tag_items)
+                    .style(Style::default().fg(THEME.text_fg))
+                    .block(pane_block("Tags", true));
+                frame.render_widget(tags, sections[1]);
+
+                let hint = Paragraph::new("Type to fuzzy filter  |  j/k or arrows to move  |  Enter add image  |  Esc cancel")
+                    .alignment(Alignment::Left)
+                    .block(Block::default().borders(Borders::ALL));
+                frame.render_widget(hint, sections[2]);
+            }
+            ModalState::ConfigureImagePorts {
+                existing_index,
+                namespace,
+                repo,
+                tag,
+                port_input,
+                service_name_input,
+                active_field,
+            } => {
+                let text = format!(
+                    "{}\n\nImage: {}/{}:{}\n\n{} Port mapping (host:container): {}\n{} Service name: {}\n\nTab: switch field  |  Enter: save  |  Esc: cancel",
+                    if existing_index.is_some() {
+                        "Edit Image"
+                    } else {
+                        "Configure Image"
+                    },
+                    namespace,
+                    repo,
+                    tag,
+                    if matches!(active_field, ConfigureField::Port) { ">" } else { " " },
+                    port_input,
+                    if matches!(active_field, ConfigureField::Name) { ">" } else { " " },
+                    service_name_input
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("Ports", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::ConfirmDeleteImage { index } => {
+                let text = if let Some(image) = app.images.get(*index) {
+                    format!(
+                        "Delete Image\n\n{}: {}/{}:{}\nports: {}\n\nPress y (or Enter) to confirm\nPress n or Esc to cancel",
+                        image.service_name,
+                        image.namespace,
+                        image.repo,
+                        image.tag,
+                        image.port_mapping
+                    )
+                } else {
+                    "Delete Image\n\nSelected image not found.\nPress Esc to cancel".to_string()
+                };
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("Confirm Delete", true));
+                frame.render_widget(widget, popup);
+            }
+            ModalState::ConfirmWriteCompose => {
+                let text = format!(
+                    "Write Compose File\n\nThis will write ./docker-compose.yaml using the current Project preview.\n\n{}\n\nPress y (or Enter) to confirm\nPress n or Esc to cancel",
+                    if app.images.is_empty() {
+                        "Warning: no images are configured yet."
+                    } else {
+                        ""
+                    }
+                );
+                let widget = Paragraph::new(text)
+                    .alignment(Alignment::Left)
+                    .block(pane_block("Confirm Write", true));
+                frame.render_widget(widget, popup);
+            }
+        }
+    }
 }

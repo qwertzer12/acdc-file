@@ -41,7 +41,7 @@ impl Tab {
     pub fn keybind_hint(self) -> &'static str {
         match self {
             Tab::Project => "r rename project",
-            Tab::Images => "n new image",
+            Tab::Images => "n new image, e edit image, d delete image",
             Tab::Env => "e edit env",
             Tab::Network => "w edit network",
         }

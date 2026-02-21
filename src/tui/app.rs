@@ -1,5 +1,49 @@
 use crate::tui::tab::Tab;
 
+#[derive(Debug, Clone)]
+pub struct ImageEntry {
+    pub service_name: String,
+    pub namespace: String,
+    pub repo: String,
+    pub tag: String,
+    pub port_mapping: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ConfigureField {
+    Port,
+    Name,
+}
+
+#[derive(Debug, Clone)]
+pub enum ModalState {
+    AddImageType {
+        input: String,
+    },
+    SelectImageTag {
+        image_term: String,
+        namespace: String,
+        repo: String,
+        all_tags: Vec<String>,
+        query: String,
+        filtered_tags: Vec<String>,
+        selected: usize,
+    },
+    ConfigureImagePorts {
+        existing_index: Option<usize>,
+        namespace: String,
+        repo: String,
+        tag: String,
+        port_input: String,
+        service_name_input: String,
+        active_field: ConfigureField,
+    },
+    ConfirmDeleteImage {
+        index: usize,
+    },
+    ConfirmWriteCompose,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum FocusArea {
     Sidebar,
@@ -20,6 +64,9 @@ pub struct App {
     pub active_tab: Tab,
     pub project_name: String,
     pub command_log: Vec<String>,
+    pub images: Vec<ImageEntry>,
+    pub images_selected: usize,
+    pub modal: Option<ModalState>,
 }
 
 impl App {
@@ -34,6 +81,9 @@ impl App {
             active_tab: Tab::Project,
             project_name,
             command_log: vec!["ready".to_string()],
+            images: Vec::new(),
+            images_selected: 0,
+            modal: None,
         }
     }
 
@@ -42,5 +92,42 @@ impl App {
         if self.command_log.len() > 5 {
             self.command_log.remove(0);
         }
+    }
+
+    pub fn next_port_mapping(&self) -> String {
+        let host_port = 8000 + self.images.len() as u16;
+        format!("{host_port}:80")
+    }
+
+    pub fn total_exposed_ports(&self) -> usize {
+        self.images
+            .iter()
+            .filter(|image| image.port_mapping.contains(':'))
+            .count()
+    }
+
+    pub fn compose_yaml(&self) -> String {
+        let mut output = String::from("services:\n");
+
+        if self.images.is_empty() {
+            output.push_str("  # No services yet\n");
+            output.push_str("  # Press n in Images tab to add one\n");
+            return output;
+        }
+
+        for image in &self.images {
+            let image_ref = if image.namespace == "library" {
+                format!("{}:{}", image.repo, image.tag)
+            } else {
+                format!("{}/{}:{}", image.namespace, image.repo, image.tag)
+            };
+
+            output.push_str(&format!(
+                "  {}:\n    image: {}\n    ports:\n      - \"{}\"\n",
+                image.service_name, image_ref, image.port_mapping
+            ));
+        }
+
+        output
     }
 }
