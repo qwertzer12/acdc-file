@@ -7,6 +7,7 @@ use crossterm::event::{self, Event, KeyCode};
 use ratatui::DefaultTerminal;
 
 use app::{App, ConfigureField, FocusArea, ImageEntry, ModalState, VolumeEntry};
+use crate::tui::tab::TabCommand;
 use crate::api;
 
 fn default_service_name(repo: &str, current_len: usize) -> String {
@@ -398,68 +399,63 @@ fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
                     }
                 }
                 KeyCode::Char(ch) => {
-                    if matches!(app.active_tab, tab::Tab::Images) && ch == 'n' {
-                        app.modal = Some(ModalState::AddImageType {
-                            input: String::new(),
-                        });
-                        app.push_log("add image: enter image term");
-                        continue;
-                    }
-
-                    if matches!(app.active_tab, tab::Tab::Images)
-                        && matches!(app.focus, FocusArea::Main)
-                        && !app.images.is_empty()
-                        && ch == 'e'
-                    {
-                        let index = app.images_selected.min(app.images.len() - 1);
-                        if let Some(image) = app.images.get(index).cloned() {
-                            app.modal = Some(ModalState::ConfigureImagePorts {
-                                existing_index: Some(index),
-                                namespace: image.namespace,
-                                repo: image.repo,
-                                tag: image.tag,
-                                port_input: image.port_mapping,
-                                service_name_input: image.service_name,
-                                active_field: ConfigureField::Port,
-                            });
-                            app.push_log("edit image: adjust ports/name");
-                            continue;
+                    if let Some(command) = app.active_tab.command_for_key(ch) {
+                        match command {
+                            TabCommand::NewImage => {
+                                app.modal = Some(ModalState::AddImageType {
+                                    input: String::new(),
+                                });
+                                app.push_log("add image: enter image term");
+                                continue;
+                            }
+                            TabCommand::EditImage => {
+                                if matches!(app.focus, FocusArea::Main) && !app.images.is_empty() {
+                                    let index = app.images_selected.min(app.images.len() - 1);
+                                    if let Some(image) = app.images.get(index).cloned() {
+                                        app.modal = Some(ModalState::ConfigureImagePorts {
+                                            existing_index: Some(index),
+                                            namespace: image.namespace,
+                                            repo: image.repo,
+                                            tag: image.tag,
+                                            port_input: image.port_mapping,
+                                            service_name_input: image.service_name,
+                                            active_field: ConfigureField::Port,
+                                        });
+                                        app.push_log("edit image: adjust ports/name");
+                                        continue;
+                                    }
+                                }
+                            }
+                            TabCommand::DeleteImage => {
+                                if matches!(app.focus, FocusArea::Main) && !app.images.is_empty() {
+                                    let index = app.images_selected.min(app.images.len() - 1);
+                                    app.modal = Some(ModalState::ConfirmDeleteImage { index });
+                                    app.push_log("delete image: confirm with y");
+                                    continue;
+                                }
+                            }
+                            TabCommand::AddVolume => {
+                                app.modal = Some(ModalState::AddVolume {
+                                    input: String::new(),
+                                });
+                                app.push_log("add volume: enter a name");
+                                continue;
+                            }
+                            TabCommand::DeleteVolume => {
+                                if matches!(app.focus, FocusArea::Main) && !app.volumes.is_empty() {
+                                    let index = app.volumes_selected.min(app.volumes.len() - 1);
+                                    let removed = app.volumes.remove(index);
+                                    if app.volumes.is_empty() {
+                                        app.volumes_selected = 0;
+                                    } else if app.volumes_selected >= app.volumes.len() {
+                                        app.volumes_selected = app.volumes.len() - 1;
+                                    }
+                                    app.push_log(format!("deleted volume {}", removed.name));
+                                    continue;
+                                }
+                            }
+                            TabCommand::RenameProject | TabCommand::EditEnv => {}
                         }
-                    }
-
-                    if matches!(app.active_tab, tab::Tab::Images)
-                        && matches!(app.focus, FocusArea::Main)
-                        && !app.images.is_empty()
-                        && ch == 'd'
-                    {
-                        let index = app.images_selected.min(app.images.len() - 1);
-                        app.modal = Some(ModalState::ConfirmDeleteImage { index });
-                        app.push_log("delete image: confirm with y");
-                        continue;
-                    }
-
-                    if matches!(app.active_tab, tab::Tab::Volume) && ch == 'a' {
-                        app.modal = Some(ModalState::AddVolume {
-                            input: String::new(),
-                        });
-                        app.push_log("add volume: enter a name");
-                        continue;
-                    }
-
-                    if matches!(app.active_tab, tab::Tab::Volume)
-                        && matches!(app.focus, FocusArea::Main)
-                        && !app.volumes.is_empty()
-                        && ch == 'd'
-                    {
-                        let index = app.volumes_selected.min(app.volumes.len() - 1);
-                        let removed = app.volumes.remove(index);
-                        if app.volumes.is_empty() {
-                            app.volumes_selected = 0;
-                        } else if app.volumes_selected >= app.volumes.len() {
-                            app.volumes_selected = app.volumes.len() - 1;
-                        }
-                        app.push_log(format!("deleted volume {}", removed.name));
-                        continue;
                     }
 
                     if ch == 'p' {

@@ -7,7 +7,7 @@ use ratatui::{
 
 use crate::tui::{
     app::{App, ConfigureField, FocusArea, ModalState},
-    tab::Tab,
+    tab::{Tab, TabStats},
     theme::THEME,
 };
 
@@ -100,6 +100,12 @@ pub fn render(frame: &mut Frame, app: &App) {
         .split(root[1]);
 
     let tabs = Tab::all();
+    let tab_stats = TabStats {
+        project_name: &app.project_name,
+        images_count: app.images.len(),
+        exposed_ports_count: app.total_exposed_ports(),
+        volumes_count: app.volumes.len(),
+    };
     let sidebar_constraints: Vec<Constraint> = tabs
         .iter()
         .map(|tab| {
@@ -130,41 +136,9 @@ pub fn render(frame: &mut Frame, app: &App) {
         };
 
         let tab_text = if is_active {
-            match tab {
-                Tab::Project => format!(
-                    "Directory: {}\nTemp: 74°C\nCPU: 12%\nMem: 418MB\n\nAction: {}",
-                    app.project_name,
-                    actions_text(&["R: rename project"])
-                ),
-                Tab::Images => {
-                    format!(
-                        "Loaded images: {}\nExposed ports: {}\n\nAction: {}",
-                        app.images.len(),
-                        app.total_exposed_ports(),
-                        actions_text(&["N: new image", "E: edit image", "D: delete image"])
-                    )
-                }
-                Tab::Volume => {
-                    format!(
-                        "Volumes: {}\n\nAction: {}",
-                        app.volumes.len(),
-                        actions_text(&["A: add volume", "D: delete volume"])
-                    )
-                }
-                Tab::Env => {
-                    format!(
-                        "Environment settings\nplaceholder\n\nAction: {}",
-                        actions_text(&["E: edit env"])
-                    )
-                }
-            }
+            tab.active_sidebar_text(&tab_stats, &actions_text(tab.action_labels()))
         } else {
-            match tab {
-                Tab::Project => "Compose preview".to_string(),
-                Tab::Images => format!("{} images", app.images.len()),
-                Tab::Volume => format!("{} volumes", app.volumes.len()),
-                Tab::Env => "Env vars".to_string(),
-            }
+            tab.inactive_summary(&tab_stats)
         };
 
         let style = if is_active {
