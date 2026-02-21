@@ -8,6 +8,9 @@ mod tui;
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
+
+    #[arg(short, long, default_value = "false")]
+    console: bool,
 }
 
 #[derive(Subcommand)]
