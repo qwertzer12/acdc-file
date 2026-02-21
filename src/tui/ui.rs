@@ -1,173 +1,15 @@
-use crossterm::event::{self, Event, KeyCode};
 use ratatui::{
-    DefaultTerminal, Frame,
+    Frame,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
 
-struct Theme {
-    active_border: Color,
-    inactive_border: Color,
-    header_fg: Color,
-    header_bg: Color,
-    footer_fg: Color,
-    text_fg: Color,
-}
-
-const THEME: Theme = Theme {
-    active_border: Color::Blue,
-    inactive_border: Color::DarkGray,
-    header_fg: Color::Black,
-    header_bg: Color::Blue,
-    footer_fg: Color::DarkGray,
-    text_fg: Color::White,
+use crate::tui::{
+    app::{App, FocusArea},
+    tab::Tab,
+    theme::THEME,
 };
-
-#[derive(Debug, Clone, Copy)]
-enum FocusArea {
-    Sidebar,
-    Main,
-}
-
-impl FocusArea {
-    fn next(self) -> Self {
-        match self {
-            FocusArea::Sidebar => FocusArea::Main,
-            FocusArea::Main => FocusArea::Sidebar,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-#[derive(PartialEq, Eq)]
-enum Tab {
-    Project,
-    Images,
-    Env,
-    Network,
-}
-
-impl Tab {
-    fn all() -> [Self; 4] {
-        [Self::Project, Self::Images, Self::Env, Self::Network]
-    }
-
-    fn title(self) -> &'static str {
-        match self {
-            Tab::Project => "Project",
-            Tab::Images => "Images",
-            Tab::Env => "Env",
-            Tab::Network => "Network",
-        }
-    }
-
-    fn next(self) -> Self {
-        match self {
-            Tab::Project => Tab::Images,
-            Tab::Images => Tab::Env,
-            Tab::Env => Tab::Network,
-            Tab::Network => Tab::Project,
-        }
-    }
-
-    fn previous(self) -> Self {
-        match self {
-            Tab::Project => Tab::Network,
-            Tab::Images => Tab::Project,
-            Tab::Env => Tab::Images,
-            Tab::Network => Tab::Env,
-        }
-    }
-
-    fn keybind_hint(self) -> &'static str {
-        match self {
-            Tab::Project => "r rename project",
-            Tab::Images => "n new image",
-            Tab::Env => "e edit env",
-            Tab::Network => "w edit network",
-        }
-    }
-
-    fn keybind_action(self, key: char) -> Option<&'static str> {
-        match (self, key) {
-            (Tab::Project, 'r') => Some("rename project requested"),
-            (Tab::Images, 'n') => Some("new image requested"),
-            (Tab::Env, 'e') => Some("edit env requested"),
-            (Tab::Network, 'w') => Some("edit network requested"),
-            _ => None,
-        }
-    }
-}
-
-struct App {
-    focus: FocusArea,
-    active_tab: Tab,
-    project_name: String,
-    command_log: Vec<String>,
-}
-
-impl App {
-    fn new() -> Self {
-        let project_name = std::env::current_dir()
-            .ok()
-            .and_then(|path| path.file_name().map(|name| name.to_string_lossy().to_string()))
-            .unwrap_or_else(|| "unknown-project".to_string());
-
-        Self {
-            focus: FocusArea::Sidebar,
-            active_tab: Tab::Project,
-            project_name,
-            command_log: vec!["ready".to_string()],
-        }
-    }
-
-    fn push_log(&mut self, line: impl Into<String>) {
-        self.command_log.push(line.into());
-        if self.command_log.len() > 5 {
-            self.command_log.remove(0);
-        }
-    }
-}
-
-pub fn run() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-    ratatui::run(app)?;
-    Ok(())
-}
-
-fn app(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
-    let mut app: App = App::new();
-
-    loop {
-        terminal.draw(|frame| render(frame, &app))?;
-
-        if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => break Ok(()),
-                KeyCode::Tab => app.focus = app.focus.next(),
-                KeyCode::Left | KeyCode::Char('h') => app.focus = FocusArea::Sidebar,
-                KeyCode::Right | KeyCode::Char('l') => app.focus = FocusArea::Main,
-                KeyCode::Up | KeyCode::Char('k') => {
-                    if matches!(app.focus, FocusArea::Sidebar) {
-                        app.active_tab = app.active_tab.previous();
-                    }
-                }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    if matches!(app.focus, FocusArea::Sidebar) {
-                        app.active_tab = app.active_tab.next();
-                    }
-                }
-                KeyCode::Char(ch) => {
-                    if let Some(action) = app.active_tab.keybind_action(ch) {
-                        app.push_log(format!("[{}] {action}", app.active_tab.title()));
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-}
 
 fn pane_block(title: &str, active: bool) -> Block<'_> {
     let border_style = if active {
@@ -184,7 +26,7 @@ fn pane_block(title: &str, active: bool) -> Block<'_> {
         .border_style(border_style)
 }
 
-fn render(frame: &mut Frame, app: &App) {
+pub fn render(frame: &mut Frame, app: &App) {
     let area = frame.area();
     frame.render_widget(Clear, area);
 
@@ -297,8 +139,7 @@ fn render(frame: &mut Frame, app: &App) {
         .iter()
         .map(|entry| ListItem::new(entry.as_str()))
         .collect();
-    let log = List::new(log_items)
-        .block(pane_block("Actions", false));
+    let log = List::new(log_items).block(pane_block("Actions", false));
     frame.render_widget(log, right[1]);
 
     let footer_text = format!(
