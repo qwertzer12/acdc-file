@@ -10,6 +10,7 @@ pub enum TabCommand {
     RenameProject,
     NewImage,
     EditImage,
+    SetImageCommand,
     AddImageEnv,
     RemoveImageEnv,
     DeleteImage,
@@ -64,7 +65,7 @@ impl Tab {
         match self {
             Tab::Project => "r rename project",
             Tab::Images => {
-                "n new image, e edit image, a add env, x remove env, d delete image, v mount volume, u unmount"
+                "n new image, e edit image, c command, a add env, x remove env, d delete image, v mount volume, u unmount"
             }
             Tab::Volume => "a add volume, d delete volume",
             Tab::Env => "e edit env",
@@ -77,6 +78,7 @@ impl Tab {
             Tab::Images => &[
                 "N: new image",
                 "E: edit image",
+                "C: set command",
                 "A: add env",
                 "X: remove env",
                 "D: delete image",
@@ -117,6 +119,7 @@ impl Tab {
             (Tab::Project, 'r') => Some(TabCommand::RenameProject),
             (Tab::Images, 'n') => Some(TabCommand::NewImage),
             (Tab::Images, 'e') => Some(TabCommand::EditImage),
+            (Tab::Images, 'c') => Some(TabCommand::SetImageCommand),
             (Tab::Images, 'a') => Some(TabCommand::AddImageEnv),
             (Tab::Images, 'x') => Some(TabCommand::RemoveImageEnv),
             (Tab::Images, 'd') => Some(TabCommand::DeleteImage),
@@ -133,6 +136,7 @@ impl Tab {
         match (self, key) {
             (Tab::Project, 'r') => Some("rename project requested"),
             (Tab::Images, 'n') => Some("new image requested"),
+            (Tab::Images, 'c') => Some("set command requested"),
             (Tab::Images, 'a') => Some("add env requested"),
             (Tab::Images, 'x') => Some("remove env requested"),
             (Tab::Images, 'v') => Some("mount volume requested"),
